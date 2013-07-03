@@ -20,12 +20,13 @@
         $(document).ready(function(){
             $("#check_for_student").click(function(){
                 number = $("number").val();
+                $("#debug").html("clicked");
                 $.ajax({
                     url: 'http://app.penncycle.org/api/check',
-                    type: 'post',
-                    data: {"number": number},
+                    type: 'POST',
+                    data: {"number": "3195943124"},
                     failure: function(data){
-                        alert(data);
+                        $("#debug").html(data);
                         $.mobile.changePage("#signup");
                         if (number.length == 8) {
                             $("#penncard").value = number;
@@ -35,7 +36,7 @@
                         }
                     },
                     success: function(data){
-                        alert(data);
+                        $("#debug").html(data);
                         $.mobile.changePage('#verify');
                     }
                 });
@@ -55,6 +56,7 @@
             <button id="check_for_student">Submit</button>
         </form>
 	</div>
+    <div id="debug">debug</div>
 	<div data-role="footer" data-theme="c">
 		<p>PennCycle! <a href="/feedback">Feedback?</a></p>
 	</div>
