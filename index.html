@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="robots" content="noindex, follow">
+	<meta name="format-detection" content="telephone-no">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="user-scalable=no, initial-scale=1, minimum-scale=1, maximum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi">
+
+    <title>PennCycle Mobile</title>
+    <link rel="stylesheet"  href="css/themes/jquery.mobile-1.3.1.min.css">
+	<link rel="stylesheet" href="css/style.css">
+    <!-- <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Open+Sans:300,400,700"> -->
+    <script src="js/jquery.js"></script>
+    <script src="js/index.js"></script>
+    <script src="js/jquery.mobile-1.3.1.min.js"></script>
+	<script src="js/cordova.js"></script>
+	<script src="js/mustache.js"></script>
+    <script>
+        $(document).ready(function(){
+            $("#check_for_student").click(function(){
+                number = $("number").val();
+                $.ajax({
+                    url: 'http://app.penncycle.org/api/check',
+                    type: 'post',
+                    data: {"number": number},
+                    failure: function(data){
+                        alert(data);
+                        $.mobile.changePage("#signup");
+                        if (number.length == 8) {
+                            $("#penncard").value = number;
+                        }
+                        if (number.length == 10) {
+                            $("#phone_number").value = number;
+                        }
+                    },
+                    success: function(data){
+                        alert(data);
+                        $.mobile.changePage('#verify');
+                    }
+                });
+            })
+        })
+	</script>
+</head>
+<body>
+<div data-role="page" id="main">
+	<div data-role="header" class="logo" data-theme="b">
+		<img src="img/logo.png">
+	</div>
+	<div data-role="content">
+        <p class="message">Enter your phone number or penncard to get started.</p>
+        <form>
+            <input type="text" id="number">
+            <button id="check_for_student">Submit</button>
+        </form>
+	</div>
+	<div data-role="footer" data-theme="c">
+		<p>PennCycle! <a href="/feedback">Feedback?</a></p>
+	</div>
+</div>
+<div data-role="page" id="verify">
+    <div id="member-info" data-role="content">Loading info...</div>
+    <input type="text" id="pin" placeholder="4 digits">
+    <div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
+</div>
+<div data-role="page" id="signup">
+    <form></form>
+	<input type="text" id="pin" placeholder="4 digits">
+	<div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
+</div>
+</body>
+</html>
