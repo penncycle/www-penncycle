@@ -8,14 +8,14 @@
 	<meta name="viewport" content="user-scalable=no, initial-scale=1, minimum-scale=1, maximum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi">
 
     <title>PennCycle Mobile</title>
-    <link rel="stylesheet"  href="css/themes/jquery.mobile-1.3.1.min.css">
-	<link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet"  href="static/css/themes/jquery.mobile-1.3.1.min.css">
+	<link rel="stylesheet" href="static/css/style.css">
     <!-- <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Open+Sans:300,400,700"> -->
-    <script src="js/jquery.js"></script>
-    <script src="js/index.js"></script>
-    <script src="js/jquery.mobile-1.3.1.min.js"></script>
-	<script src="js/cordova.js"></script>
-	<script src="js/mustache.js"></script>
+    <script src="static/js/jquery.js"></script>
+    <script src="static/js/index.js"></script>
+    <script src="static/js/jquery.mobile-1.3.1.min.js"></script>
+	<script src="static/js/cordova.js"></script>
+	<script src="static/js/mustache.js"></script>
     <script>
         $(document).ready(function(){
             $("#check_for_student").click(function(){
@@ -24,37 +24,37 @@
                 $.ajax({
                     url: 'http://app.penncycle.org/api/check',
                     type: 'POST',
-                    data: {"number": "3195943124"},
-                    failure: function(data){
-                        $("#debug").html(data);
-                        $.mobile.changePage("#signup");
-                        if (number.length == 8) {
-                            $("#penncard").value = number;
-                        }
-                        if (number.length == 10) {
-                            $("#phone_number").value = number;
-                        }
-                    },
-                    success: function(data){
-                        $("#debug").html(data);
-                        $.mobile.changePage('#verify');
+                    dataType: 'json',
+                    data: {"number": number}
+                }).done(function(data) {
+                    $("#debug").html(data);
+                    console.log(data);
+                    $.mobile.changePage("#verify");
+                }).fail(function(data) {
+                    $("#debug").html(data);
+                    console.log("failed with data:")
+                    console.log(data);
+                    $.mobile.changePage("#signup");
+                    if (number.length == 8) {
+                        $("#penncard").value = number;
+                    }
+                    if (number.length == 10) {
+                        $("#phone_number").value = number;
                     }
                 });
-            })
-        })
+            });
+        });
 	</script>
 </head>
 <body>
 <div data-role="page" id="main">
 	<div data-role="header" class="logo" data-theme="b">
-		<img src="img/logo.png">
+		<img src="static/img/logo.png">
 	</div>
 	<div data-role="content">
         <p class="message">Enter your phone number or penncard to get started.</p>
-        <form>
-            <input type="text" id="number">
-            <button id="check_for_student">Submit</button>
-        </form>
+        <input type="text" id="number">
+        <button id="check_for_student">Submit</button>
 	</div>
     <div id="debug">debug</div>
 	<div data-role="footer" data-theme="c">
@@ -67,9 +67,8 @@
     <div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
 </div>
 <div data-role="page" id="signup">
-    <form></form>
-	<input type="text" id="pin" placeholder="4 digits">
-	<div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
+    <input type="text" id="pin" placeholder="4 digits">
+    <div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
 </div>
 </body>
 </html>
