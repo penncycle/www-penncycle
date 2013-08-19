@@ -1,74 +1,256 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <meta name="robots" content="noindex, follow">
+	<meta charset="utf-8">
+	<meta name="robots" content="noindex, follow">
 	<meta name="format-detection" content="telephone-no">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="viewport" content="user-scalable=no, initial-scale=1, minimum-scale=1, maximum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi">
 
-    <title>PennCycle Mobile</title>
-    <link rel="stylesheet"  href="static/css/themes/jquery.mobile-1.3.1.min.css">
+	<title>PennCycle Mobile</title>
+	<link rel="stylesheet" href="static/css/themes/jquery.mobile-1.3.1.min.css">
 	<link rel="stylesheet" href="static/css/style.css">
-    <!-- <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Open+Sans:300,400,700"> -->
-    <script src="static/js/jquery.js"></script>
-    <script src="static/js/index.js"></script>
-    <script src="static/js/jquery.mobile-1.3.1.min.js"></script>
+	<script src="static/js/jquery.js"></script>
+	<script src="static/js/index.js"></script>
+	<script src="static/js/jquery.mobile-1.3.1.min.js"></script>
+	<script src="static/js/jquery.cookie.js"></script>
 	<script src="static/js/cordova.js"></script>
 	<script src="static/js/mustache.js"></script>
-    <script>
-        $(document).ready(function(){
-            $("#check_for_student").click(function(){
-                number = $("number").val();
-                $("#debug").html("clicked");
-                $.ajax({
-                    url: 'http://app.penncycle.org/api/check',
-                    type: 'POST',
-                    dataType: 'json',
-                    data: {"number": number}
-                }).done(function(data) {
-                    $("#debug").html(data);
-                    console.log(data);
-                    $.mobile.changePage("#verify");
-                }).fail(function(data) {
-                    $("#debug").html(data);
-                    console.log("failed with data:")
-                    console.log(data);
-                    $.mobile.changePage("#signup");
-                    if (number.length == 8) {
-                        $("#penncard").value = number;
-                    }
-                    if (number.length == 10) {
-                        $("#phone_number").value = number;
-                    }
-                });
-            });
-        });
+	<link rel="stylesheet" type="text/css" href="static/css/bootstrap.css">
+	<style type="text/css">
+		.asteriskField {
+			display: none;
+		}
+		.waiver_wrapper {
+			height: 300px;
+			overflow: scroll;
+			padding:10px;
+			background-color: white;
+		}
+		#map {
+			width: 100%;
+			height: 250px;
+		}
+	</style>
+	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=false"></script>
+	<script>
+		var student_data, bike_data;
+		var base_url = "http://localhost:8001/";
+		$(document).ready(function(){
+			$("#check_for_student").click(function(){
+				penncard = $("#penncard").val();
+				$.post(
+					base_url + "mobile/check_for_student/",
+					{"penncard": penncard},
+					function(data) {
+						if (data.registered) {
+							$.mobile.changePage("#verify");
+							temp = "Welcome back, {{student}}!";
+							welcome_message = Mustache.render(temp, data);
+							$("#welcome_message").html(welcome_message);
+							$.cookie("penncard", penncard)
+						} else {
+							$.mobile.changePage("#signup");
+							$("#signup_form_wrapper").html(data.signup_form);
+						}
+					}
+				);
+			});
+
+			$("#verify_pin").click(function() {
+				penncard = $.cookie("penncard");
+				if (!penncard) {
+					$.mobile.changePage("#index");
+					return;
+				}
+				pin = $("#pin").val();
+				$.post(
+					base_url + "mobile/verify/",
+					{"penncard": penncard, "pin": pin},
+					function(data) {
+						if (data.valid) {
+							$.mobile.changePage("#welcome");
+							$.cookie("pin", pin);
+							student_data = data.student_data;
+							bike_data = data.bike_data;
+						} else {
+							$("#pin_error").html("Pin did not match.");
+						}
+					}
+				);
+			});
+
+			$("#resend_pin").click(function() {
+				$.post(
+					base_url + "mobile/send_pin/",
+					{"penncard": penncard},
+					function(data) {
+						if (data.success) {
+							$("#pin_error").html(
+								"Pin sent to " + data.phone
+							);
+						} else {
+							$("#pin_error").html(
+								"Unable to resend PIN. Email messenger@penncycle.org if this problem persists."
+							);
+						}
+					}
+				);
+			});
+			$("#submit_signup_form").click(function(e) {
+				$.post(
+					base_url + "mobile/signup/",
+					$("#signup_form").serialize(),
+					function(data) {
+						if (data.success) {
+							$.cookie("pin", data.pin);
+							$.mobile.changePage("#waiver");
+							$("#waiver_text").html(data.waiver);
+							student_data = data.student_data;
+							bike_data = data.bike_data;
+						} else {
+							$("#signup_form_wrapper").html(data.signup_form);
+						}
+					}
+				);
+			});
+			$("#accept_waiver").click(function() {
+				$.post(
+					base_url + "verify_waiver/",
+					{"penncard": $.cookie("penncard")},
+					function(data) {
+						if (data.message == "success") {
+							$.mobile.changePage("#welcome");
+						}
+					}
+				);
+			});
+			$(document).on("pageinit", "#welcome", function() {
+				navigator.geolocation.getCurrentPosition(geoSuccess, geoFail
+				);
+			});
+			$("#logout").on("pageshow", function() {
+				$.removeCookie("penncard");
+				$.removeCookie("pin");
+				$.mobile.changePage("#index");
+			});
+			function geoSuccess(position) {
+				lat = position.coords.latitude;
+				lng = position.coords.longitude;
+				var currentPosition = new google.maps.LatLng(lat, lng);
+				var mapOptions = {
+					zoom: 12,
+					center: currentPosition,
+					mapTypeId: google.maps.MapTypeId.ROADMAP
+				};
+				var map = new google.maps.Map(document.getElementById("map"), mapOptions);
+				var marker = new google.maps.Marker({
+					position: currentPosition,
+					map: map
+				});
+			}
+			function geoFail(error) {
+				alert("Please enable location services.");
+			}
+		});
 	</script>
 </head>
 <body>
-<div data-role="page" id="main">
-	<div data-role="header" class="logo" data-theme="b">
-		<img src="static/img/logo.png">
+	<div data-role="page" id="index">
+		<div data-role="header" class="logo" data-theme="b" href="#index">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<h2>Welcome to PennCycle Mobile!</h2>
+			<p class="message">Enter your PennCard to get started.</p>
+			<input type="text" id="penncard" placeholder="8 digits">
+			<button id="check_for_student">Submit</button>
+		</div>
+		<div data-role="footer" class="ui-bar">
+			<a href="/feedback">Feedback?</a>
+		</div>
 	</div>
-	<div data-role="content">
-        <p class="message">Enter your phone number or penncard to get started.</p>
-        <input type="text" id="number">
-        <button id="check_for_student">Submit</button>
+
+
+	<div data-role="page" id="signup">
+		<div data-role="header" class="logo" data-theme="b">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<h2>Sign up to get started!</h2>
+			<div id="signup_form_wrapper"></div>
+			<button id="submit_signup_form">Submit</button>
+		</div>
+		<div data-role="footer" class="ui-bar">
+			<a href="#index">Return Home</a>
+			<a href="/feedback">Feedback?</a>
+		</div>
 	</div>
-    <div id="debug">debug</div>
-	<div data-role="footer" data-theme="c">
-		<p>PennCycle! <a href="/feedback">Feedback?</a></p>
+
+
+	<div data-role="page" id="verify">
+		<div data-role="header" class="logo" data-theme="b">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<h2 id="welcome_message"></h2>
+			<p>Enter your PIN to log in to PennCycle.</p>
+			<input type="text" id="pin" placeholder="4 digits">
+			<p id="pin_error"></p>
+			<div id="verify_pin" data-role="button" data-theme="d" type="button">Submit</div>
+			<br>
+			<a id="resend_pin">Forgot your pin? Click here to have it sent to your phone.</a>
+		</div>
+		<div data-role="footer" class="ui-bar">
+			<a href="#index">Return Home</a>
+			<a href="/feedback">Feedback?</a>
+		</div>
 	</div>
-</div>
-<div data-role="page" id="verify">
-    <div id="member-info" data-role="content">Loading info...</div>
-    <input type="text" id="pin" placeholder="4 digits">
-    <div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
-</div>
-<div data-role="page" id="signup">
-    <input type="text" id="pin" placeholder="4 digits">
-    <div data-role="button" data-shadow="true" data-theme="d" type="button">Submit</div>
-</div>
+
+	<div data-role="page" id="waiver">
+		<div data-role="header" class="logo" data-theme="b">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<h3>Please review and sign our waiver.</h3>
+			<div id="waiver_text" class="waiver_wrapper"></div>
+			<button id="accept_waiver">I accept this waiver.</button>
+		</div>
+		<div data-role="footer" class="ui-bar" data-theme="c">
+			<a href="#index">Return Home</a>
+			<a href="#feedback">Feedback?</a>
+			<a href="#logout">Log Out</a>
+		</div>
+	</div>
+
+	<div data-role="page" id="welcome">
+		<div data-role="header" class="logo" data-theme="b">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<p id="welcome_message"></p>
+			<div id="map"></div>
+		</div>
+		<div data-role="footer" class="ui-bar" data-theme="c">
+			<a href="#welcome">Return Home</a>
+			<a href="/feedback">Feedback?</a>
+			<a href="#logout">Log Out</a>
+		</div>
+	</div>
+
+	<div data-role="page" id="logout">
+		<div data-role="header" class="logo" data-theme="b">
+			<img src="static/img/logo.png">
+		</div>
+		<div data-role="content">
+			<h2>You have been successfully logged out.</h2>
+			<p>Thanks for using Penncycle mobile!</p>
+			<a href="#index">Return Home</a>
+		</div>
+		<div data-role="footer" class="ui-bar">
+			<a href="#index">Return Home</a>
+			<a href="#feedback">Feedback?</a>
+		</div>
+	</div>
 </body>
 </html>
