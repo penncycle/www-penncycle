@@ -126,8 +126,11 @@
 				);
 			});
 			$(document).on("pageinit", "#welcome", function() {
-				navigator.geolocation.getCurrentPosition(geoSuccess, geoFail
-				);
+				document.addEventListener("deviceready", locate, false);
+				function locate() {
+					navigator.geolocation.getCurrentPosition(geoSuccess, geoFail
+					);
+				}
 			});
 			$("#logout").on("pageshow", function() {
 				$.removeCookie("penncard");
