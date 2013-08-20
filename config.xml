@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.phonegap.hello-world" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:gap="http://phonegap.com/ns/1.0">
+<widget id="org.phonegap" version="0.1.0" xmlns="http://www.w3.org/ns/widgets" xmlns:gap="http://phonegap.com/ns/1.0">
     <name>PennCycle</name>
     <description>
-        Hello World sample application that responds to the deviceready event.
+        PennCycle, the student-run bike share of Penn, is happy to offer a mobile application for the conveniece of its riders.
     </description>
     <author email="support@phonegap.com" href="http://phonegap.com">
         PhoneGap Team
