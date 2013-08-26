@@ -16,6 +16,11 @@
 	<script src="static/js/mustache.js"></script>
 	<link rel="stylesheet" type="text/css" href="static/css/bootstrap.css">
 	<style type="text/css">
+		html, body {
+			height: 100%;
+			width: 100%;
+			margin: 0;
+		}
 		.asteriskField {
 			display: none;
 		}
@@ -27,13 +32,35 @@
 		}
 		#map {
 			width: 100%;
-			height: 250px;
+			height: 50%;
+		}
+		.full {
+			height: 100%;
+		}
+		.logo {
+			height: 8%;
+		}
+		.logo img {
+			height: 100%;
+		}
+		.marker {
+			font-weight: 900;
+			font-size: 16px;
+			line-height: 16px;
+			background-color: white;
+			text-align: center;
+			border-radius: 2px;
+		}
+		.station_marker {
+			padding-left: -10px;
+			background-color: hsl(220, 100%, 90%);
 		}
 	</style>
 	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=false"></script>
+	<script src="static/js/markerwithlabel.js"></script>
 	<script>
 		var student_data, bike_data, map, phone, lat, lng;
-		var base_url = "http://www.penncycle.org/";
+		var base_url = "http://localhost:8001/";
 		$(function(){
 			if (document.URL.indexOf("http://") == -1) {
 				phone = true;
@@ -57,7 +84,7 @@
 			window.setTimeout(function () {
 				if ( !window.device ) {
 					window.clearInterval(timer);
-					alert("failure()");
+					alert("Failed to load within 10 seconds. Close and reopen the app.");
 				};
 		    }, 10000 ); //10 seconds
 		};
@@ -68,23 +95,10 @@
 					$(".offline").css("visibility", "visible");
 				}
 			}
+			init();
 			$("#index").on("pageshow", function() {
-				map = initMap();
-				bikes = get_bike_data();
-				for (var i = bikes.length - 1; i >= 0; i--) {
-					lat = bike_data[i].latitude;
-					lng = bike_data[i].longitude;
-					pos = new google.maps.LatLng(lat, lng);
-					var marker = new google.maps.Marker({
-						position: pos,
-						map: map,
-						icon: "static/img/bike_icon.png"
-					});
-				}
-				navigator.geolocation.getCurrentPosition(geoSuccess, geoFail);
-				debugger
+				init();
 			});
-
 
 			$("#check_for_student").click(function() {
 				penncard = $("#penncard").val();
@@ -93,13 +107,13 @@
 					{"penncard": penncard},
 					function(data) {
 						if (data.registered) {
-							$.mobile.changePage("#verify", {transition: 'pop', role: 'dialog'});
+							$.mobile.changePage("#verify");
 							temp = "Welcome back, {{student}}!";
 							welcome_message = Mustache.render(temp, data);
 							$("#welcome_message").html(welcome_message);
 							window.localStorage.setItem("penncard", penncard);
 						} else {
-							$.mobile.changePage("#signup", {transition: 'pop', role: 'dialog'});
+							$.mobile.changePage("#signup");
 							$("#signup_form_wrapper").html(data.signup_form);
 						}
 					});
@@ -107,6 +121,7 @@
 
 			$("#verify_pin").click(function() {
 				penncard = window.localStorage.getItem("penncard");
+				debugger
 				if (!penncard) {
 					$.mobile.changePage("#index");
 				}
@@ -160,21 +175,41 @@
 			$("#accept_waiver").click(function() {
 				$.post(
 					base_url + "verify_waiver/",
-					{"penncard": window.localstorage.getItem("penncard")},
+					{"penncard": window.localStorage.getItem("penncard")},
 					function(data) {
 						if (data.message == "success") {
-							$.mobile.changePage("#welcome");
+							$.mobile.changePage("#index");
 						}
+					});
+			});
+			$("#submit_feedback").click(function() {
+				$.post(
+					base_url + "mobile/feedback/",
+					{"feedback": $("#feedback_text").val()},
+					function(data) {
+						alert("Feedback submitted. Thanks!");
+						$.mobile.changePage("#index");
 					});
 			});
 
 			$("#logout").on("pageshow", function() {
 				window.localStorage.clear();
-				$.mobile.changePage("#index");
 			});
 		}
-
+		function init() {
+			map = initMap();
+			get_bike_data();
+			get_station_data();
+			navigator.geolocation.getCurrentPosition(geoSuccess, geoFail);
+			if (!window.localStorage.hasOwnProperty("penncard")) {
+				$("#content").replaceWith($("#home"));
+			} else {
+				$("#content").replaceWith($("#welcome"));
+			}
+			$("#index").trigger("create");
+		}
 		function geoSuccess(position) {
+			console.log("Successfully got coordinates")
 			lat = position.coords.latitude;
 			lng = position.coords.longitude;
 			var currentPosition = new google.maps.LatLng(lat, lng);
@@ -192,40 +227,100 @@
 				center: new google.maps.LatLng(39.951600,-75.197794),
 				mapTypeId: google.maps.MapTypeId.ROADMAP
 			};
-			map = new google.maps.Map(map_element, mapOptions);
+			map = new google.maps.Map(document.getElementById("map"), mapOptions);
 			return map;
 		}
 		function get_bike_data() {
-			$.getJSON(base_url + "/mobile/bike_data", function(data) {
-				var bikes = data;
+			var station_counts = {};
+			$.getJSON(base_url + "mobile/bike_data/", function(bikes) {
+				bike_data = bikes;
+				for (var i = bikes.length - 1; i >= 0; i--) {
+					bike = bikes[i];
+					if (bike.status == "available") {
+						lat = bike.latitude;
+						lng = bike.longitude;
+						station = bike.location;
+						if (station_counts[station]) {
+							lng += .0005 * (station_counts[station] % 5);
+							lat -= .0005 * Math.floor(station_counts[station] / 5);
+							station_counts[station] += 1;
+						} else {
+							station_counts[station] = 1;
+						}
+						pos = new google.maps.LatLng(lat, lng);
+						var marker = new MarkerWithLabel({
+							position: pos,
+							map: map,
+							icon: "static/img/bike_icon.png",
+							labelContent: bike.name.split(" ")[0],
+							labelClass: "marker"
+						});
+					}
+				}
+				if (window.localStorage.hasOwnProperty("penncard")) {
+					show_bikes_for_checkout();
+				}
 			});
-			return bikes;
+		}
+		function get_station_data() {
+			$.getJSON(base_url + "mobile/station_data/", function(stations) {
+				for (var i = stations.length - 1; i >= 0; i--) {
+					station = stations[i];
+					lng = station.longitude - .0001;
+					lat = station.latitude + .0001;
+					pos = new google.maps.LatLng(lat, lng);
+					var marker = new MarkerWithLabel({
+						position: pos,
+						map: map,
+						icon: "static/img/station_icon.png",
+						labelContent: station.name,
+						labelClass: "station_marker"
+					});
+				};
+			});
+		}
+		function show_bikes_for_checkout() {
+			var letters = ["a", "b", "c"]
+			var template = '<div class="ui-block-{{block}}">'
+			+ '<img src="static/img/bikes/{{manufacturer}}.png">'
+			+ '<h3>{{name}} ({{manufacturer}}): At {{location}}</h3>'
+			+ '<button id="checkout" number="{{number}}">Check Out</button>'
+			+ '</div>';
+			var available_bikes = [];
+			for (var i = bike_data.length - 1; i >= 0; i--) {
+				if (bike_data[i].status == "available") {
+					available_bikes.push(bike_data[i]);
+				}
+			}
+			for (var i = 0; i < available_bikes.length; i++) {
+				bike = available_bikes[i];
+				bike.block = letters[i % 3];
+				var html = Mustache.render(template, bike)
+				$("#bikes_for_checkout").append(html);
+			}
+			$("#index").trigger("create");
 		}
 	</script>
 </head>
 <body>
-	<div data-role="page" id="index">
+	<div data-role="page" id="index" class="full">
 		<div data-role="header" class="logo" data-theme="b" href="#index">
 			<img src="static/img/logo.png">
 		</div>
-		<div data-role="content">
+		<div data-role="content" class="full">
 			<div id="map"></div>
-			<div id="content">
-				<h2>Welcome to PennCycle Mobile!</h2>
-				<p class="message">Enter your PennCard to get started.</p>
-				<input type="text" id="penncard" placeholder="8 digits">
-				<button id="check_for_student">Submit</button>
-			</div>
+			<div id="content"></div>
 		</div>
 		<h2 class="offline" style="display:none">Offline</h2>
 		<div data-role="footer" class="ui-bar">
 			<a href="#index">Home</a>
-			<a href="/feedback">Feedback?</a>
+			<a href="#feedback">Feedback?</a>
+			<a href="#logout">Log Out</a>
 		</div>
 	</div>
 
 
-	<div data-role="page" id="signup">
+	<div data-role="dialog" id="signup" data-transition="pop">
 		<div data-role="content">
 			<h2>Sign up to get started!</h2>
 			<div id="signup_form_wrapper"></div>
@@ -233,8 +328,17 @@
 		</div>
 	</div>
 
+	<div data-role="dialog" id="feedback" data-transition="pop">
+		<div data-role="content">
+			<h2>We appreciate your feedback.</h2>
+			<p>If your comment is about the functionality of the app, please let us know what platform you are using (iOS, Android, etc).</p>
+			<input type="text" id="feedback_text">
+			<button id="submit_feedback">Submit</button>
+		</div>
+	</div>
 
-	<div data-role="page" id="verify">
+
+	<div data-role="dialog" id="verify" data-transition="pop">
 		<div data-role="content">
 			<h2 id="welcome_message"></h2>
 			<p>Enter your PIN to log in to PennCycle.</p>
@@ -274,6 +378,18 @@
 		<div data-role="footer" class="ui-bar">
 			<a href="#index">Home</a>
 			<a href="#feedback">Feedback?</a>
+		</div>
+	</div>
+
+	<div data-role="page" id="templates">
+		<div id="home">
+			<h2>Welcome to PennCycle Mobile!</h2>
+			<p class="message">Enter your PennCard to get started.</p>
+			<input type="text" id="penncard" placeholder="8 digits">
+			<button id="check_for_student">Submit</button>
+		</div>
+		<div id="welcome">
+			<div class="ui-grid-b" id="bikes_for_checkout"></div>
 		</div>
 	</div>
 </body>
