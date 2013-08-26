@@ -6,14 +6,12 @@
 	<meta name="format-detection" content="telephone-no">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="viewport" content="user-scalable=no, initial-scale=1, minimum-scale=1, maximum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi">
-
 	<title>PennCycle Mobile</title>
 	<link rel="stylesheet" href="static/css/themes/jquery.mobile-1.3.1.min.css">
 	<link rel="stylesheet" href="static/css/style.css">
 	<script src="static/js/jquery.js"></script>
 	<script src="static/js/index.js"></script>
 	<script src="static/js/jquery.mobile-1.3.1.min.js"></script>
-	<script src="static/js/jquery.cookie.js"></script>
 	<script src="static/js/cordova.js"></script>
 	<script src="static/js/mustache.js"></script>
 	<link rel="stylesheet" type="text/css" href="static/css/bootstrap.css">
@@ -34,7 +32,7 @@
 	</style>
 	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=false"></script>
 	<script>
-		var student_data, bike_data, map, phone;
+		var student_data, bike_data, map, phone, lat, lng;
 		var base_url = "http://www.penncycle.org/";
 		$(function(){
 			if (document.URL.indexOf("http://") == -1) {
@@ -44,44 +42,73 @@
 			}
 
 			if (window.phone) {
-				document.addEventListener("deviceready", deviceReady, false);
+				initializePhoneGap();
 			} else {
 				deviceReady();
 			}
 		});
+		function initializePhoneGap() {
+			var timer = window.setInterval(function () {
+				if (window.device) {
+					window.clearInterval(timer);
+					deviceReady();
+				}
+			}, 100 );
+			window.setTimeout(function () {
+				if ( !window.device ) {
+					window.clearInterval(timer);
+					alert("failure()");
+				};
+		    }, 10000 ); //10 seconds
+		};
 		function deviceReady() {
-			console.log("Device ready!");
 			if (phone) {
 				var network = navigator.connection.type;
 				if (network == "none") {
 					$(".offline").css("visibility", "visible");
 				}
 			}
-			$("#check_for_student").click(function(){
+			$("#index").on("pageshow", function() {
+				map = initMap();
+				bikes = get_bike_data();
+				for (var i = bikes.length - 1; i >= 0; i--) {
+					lat = bike_data[i].latitude;
+					lng = bike_data[i].longitude;
+					pos = new google.maps.LatLng(lat, lng);
+					var marker = new google.maps.Marker({
+						position: pos,
+						map: map,
+						icon: "static/img/bike_icon.png"
+					});
+				}
+				navigator.geolocation.getCurrentPosition(geoSuccess, geoFail);
+				debugger
+			});
+
+
+			$("#check_for_student").click(function() {
 				penncard = $("#penncard").val();
 				$.post(
 					base_url + "mobile/check_for_student/",
 					{"penncard": penncard},
 					function(data) {
 						if (data.registered) {
-							$.mobile.changePage("#verify");
+							$.mobile.changePage("#verify", {transition: 'pop', role: 'dialog'});
 							temp = "Welcome back, {{student}}!";
 							welcome_message = Mustache.render(temp, data);
 							$("#welcome_message").html(welcome_message);
-							$.cookie("penncard", penncard)
+							window.localStorage.setItem("penncard", penncard);
 						} else {
-							$.mobile.changePage("#signup");
+							$.mobile.changePage("#signup", {transition: 'pop', role: 'dialog'});
 							$("#signup_form_wrapper").html(data.signup_form);
 						}
-					}
-					);
+					});
 			});
 
 			$("#verify_pin").click(function() {
-				penncard = $.cookie("penncard");
+				penncard = window.localStorage.getItem("penncard");
 				if (!penncard) {
 					$.mobile.changePage("#index");
-					return;
 				}
 				pin = $("#pin").val();
 				$.post(
@@ -89,15 +116,13 @@
 					{"penncard": penncard, "pin": pin},
 					function(data) {
 						if (data.valid) {
-							$.cookie("pin", pin);
+							window.localStorage.setItem("pin", pin);
 							student_data = data.student_data;
-							bike_data = data.bike_data;
-							$.mobile.changePage("#welcome");
+							$.mobile.changePage("#index");
 						} else {
 							$("#pin_error").html("Pin did not match.");
 						}
-					}
-					);
+					});
 			});
 
 			$("#resend_pin").click(function() {
@@ -114,8 +139,7 @@
 								"Unable to resend PIN. Email messenger@penncycle.org if this problem persists."
 								);
 						}
-					}
-					);
+					});
 			});
 			$("#submit_signup_form").click(function(e) {
 				$.post(
@@ -123,7 +147,7 @@
 					$("#signup_form").serialize(),
 					function(data) {
 						if (data.success) {
-							$.cookie("pin", data.pin);
+							window.localStorage.setItem("pin", data.pin);
 							$.mobile.changePage("#waiver");
 							$("#waiver_text").html(data.waiver);
 							student_data = data.student_data;
@@ -131,37 +155,21 @@
 						} else {
 							$("#signup_form_wrapper").html(data.signup_form);
 						}
-					}
-					);
+					});
 			});
 			$("#accept_waiver").click(function() {
 				$.post(
 					base_url + "verify_waiver/",
-					{"penncard": $.cookie("penncard")},
+					{"penncard": window.localstorage.getItem("penncard")},
 					function(data) {
 						if (data.message == "success") {
 							$.mobile.changePage("#welcome");
 						}
-					}
-					);
-			});
-			$(document).on("pageinit", "#welcome", function() {
-				navigator.geolocation.getCurrentPosition(geoSuccess, geoFail);
-				debugger
-				for (var i = bike_data.length - 1; i >= 0; i--) {
-					lat = bike_data[i].latitude;
-					lng = bike_data[i].longitude;
-					pos = new google.maps.LatLng(lat, lng);
-					var marker = new google.maps.Marker({
-						position: pos,
-						map: map,
-						icon: "static/img/bike_icon.png"
 					});
-				}
 			});
+
 			$("#logout").on("pageshow", function() {
-				$.removeCookie("penncard");
-				$.removeCookie("pin");
+				window.localStorage.clear();
 				$.mobile.changePage("#index");
 			});
 		}
@@ -170,12 +178,6 @@
 			lat = position.coords.latitude;
 			lng = position.coords.longitude;
 			var currentPosition = new google.maps.LatLng(lat, lng);
-			var mapOptions = {
-				zoom: 16,
-				center: currentPosition,
-				mapTypeId: google.maps.MapTypeId.ROADMAP
-			};
-			map = new google.maps.Map(document.getElementById("map"), mapOptions);
 			var marker = new google.maps.Marker({
 				position: currentPosition,
 				map: map
@@ -183,6 +185,21 @@
 		}
 		function geoFail(error) {
 			alert("Please enable location services.");
+		}
+		function initMap() {
+			var mapOptions = {
+				zoom: 16,
+				center: new google.maps.LatLng(39.951600,-75.197794),
+				mapTypeId: google.maps.MapTypeId.ROADMAP
+			};
+			map = new google.maps.Map(map_element, mapOptions);
+			return map;
+		}
+		function get_bike_data() {
+			$.getJSON(base_url + "/mobile/bike_data", function(data) {
+				var bikes = data;
+			});
+			return bikes;
 		}
 	</script>
 </head>
@@ -192,39 +209,32 @@
 			<img src="static/img/logo.png">
 		</div>
 		<div data-role="content">
-			<h2>Welcome to PennCycle Mobile!</h2>
-			<p class="message">Enter your PennCard to get started.</p>
-			<input type="text" id="penncard" placeholder="8 digits">
-			<button id="check_for_student">Submit</button>
+			<div id="map"></div>
+			<div id="content">
+				<h2>Welcome to PennCycle Mobile!</h2>
+				<p class="message">Enter your PennCard to get started.</p>
+				<input type="text" id="penncard" placeholder="8 digits">
+				<button id="check_for_student">Submit</button>
+			</div>
 		</div>
+		<h2 class="offline" style="display:none">Offline</h2>
 		<div data-role="footer" class="ui-bar">
 			<a href="#index">Home</a>
-			<h2 class="offline" style="display:none">Currently Offline</h2>
 			<a href="/feedback">Feedback?</a>
 		</div>
 	</div>
 
 
 	<div data-role="page" id="signup">
-		<div data-role="header" class="logo" data-theme="b">
-			<img src="static/img/logo.png">
-		</div>
 		<div data-role="content">
 			<h2>Sign up to get started!</h2>
 			<div id="signup_form_wrapper"></div>
 			<button id="submit_signup_form">Submit</button>
 		</div>
-		<div data-role="footer" class="ui-bar">
-			<a href="#index">Return Home</a>
-			<a href="/feedback">Feedback?</a>
-		</div>
 	</div>
 
 
 	<div data-role="page" id="verify">
-		<div data-role="header" class="logo" data-theme="b">
-			<img src="static/img/logo.png">
-		</div>
 		<div data-role="content">
 			<h2 id="welcome_message"></h2>
 			<p>Enter your PIN to log in to PennCycle.</p>
@@ -233,10 +243,6 @@
 			<div id="verify_pin" data-role="button" data-theme="d" type="button">Submit</div>
 			<br>
 			<a id="resend_pin">Forgot your pin? Click here to have it sent to your phone.</a>
-		</div>
-		<div data-role="footer" class="ui-bar">
-			<a href="#index">Return Home</a>
-			<a href="/feedback">Feedback?</a>
 		</div>
 	</div>
 
@@ -250,23 +256,8 @@
 			<button id="accept_waiver">I accept this waiver.</button>
 		</div>
 		<div data-role="footer" class="ui-bar" data-theme="c">
-			<a href="#index">Return Home</a>
+			<a href="#index">Home</a>
 			<a href="#feedback">Feedback?</a>
-			<a href="#logout">Log Out</a>
-		</div>
-	</div>
-
-	<div data-role="page" id="welcome">
-		<div data-role="header" class="logo" data-theme="b">
-			<img src="static/img/logo.png">
-		</div>
-		<div data-role="content">
-			<p id="welcome_message"></p>
-			<div id="map"></div>
-		</div>
-		<div data-role="footer" class="ui-bar" data-theme="c">
-			<a href="#welcome">Return Home</a>
-			<a href="/feedback">Feedback?</a>
 			<a href="#logout">Log Out</a>
 		</div>
 	</div>
@@ -281,7 +272,7 @@
 			<a href="#index">Return Home</a>
 		</div>
 		<div data-role="footer" class="ui-bar">
-			<a href="#index">Return Home</a>
+			<a href="#index">Home</a>
 			<a href="#feedback">Feedback?</a>
 		</div>
 	</div>
