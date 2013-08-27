@@ -97,6 +97,7 @@
 			}
 			init();
 			$("#index").on("pageshow", function() {
+				location.reload();
 				init();
 			});
 
@@ -121,7 +122,6 @@
 
 			$("#verify_pin").click(function() {
 				penncard = window.localStorage.getItem("penncard");
-				debugger
 				if (!penncard) {
 					$.mobile.changePage("#index");
 				}
@@ -197,6 +197,7 @@
 			});
 		}
 		function init() {
+			console.log("that's why i'm init");
 			map = initMap();
 			get_bike_data();
 			get_station_data();
@@ -237,8 +238,8 @@
 				for (var i = bikes.length - 1; i >= 0; i--) {
 					bike = bikes[i];
 					if (bike.status == "available") {
-						lat = bike.latitude;
-						lng = bike.longitude;
+						lat = bike.latitude - .0005;
+						lng = bike.longitude - .0002;
 						station = bike.location;
 						if (station_counts[station]) {
 							lng += .0005 * (station_counts[station] % 5);
@@ -252,7 +253,7 @@
 							position: pos,
 							map: map,
 							icon: "static/img/bike_icon.png",
-							labelContent: bike.name.split(" ")[0],
+							labelContent: bike.name,
 							labelClass: "marker"
 						});
 					}
@@ -266,8 +267,8 @@
 			$.getJSON(base_url + "mobile/station_data/", function(stations) {
 				for (var i = stations.length - 1; i >= 0; i--) {
 					station = stations[i];
-					lng = station.longitude - .0001;
-					lat = station.latitude + .0001;
+					lng = station.longitude;
+					lat = station.latitude;
 					pos = new google.maps.LatLng(lat, lng);
 					var marker = new MarkerWithLabel({
 						position: pos,
@@ -281,10 +282,10 @@
 		}
 		function show_bikes_for_checkout() {
 			var letters = ["a", "b", "c"]
-			var template = '<div class="ui-block-{{block}}">'
+			var template = '<div id="bike_{{name}}" class="hidden ui-block-{{block}}">'
 			+ '<img src="static/img/bikes/{{manufacturer}}.png">'
 			+ '<h3>{{name}} ({{manufacturer}}): At {{location}}</h3>'
-			+ '<button id="checkout" number="{{number}}">Check Out</button>'
+			+ '<button class="checkout" number="{{name}}">Check Out</button>'
 			+ '</div>';
 			var available_bikes = [];
 			for (var i = bike_data.length - 1; i >= 0; i--) {
@@ -316,6 +317,7 @@
 			<a href="#index">Home</a>
 			<a href="#feedback">Feedback?</a>
 			<a href="#logout">Log Out</a>
+			<a onclick="location.reload()">Refresh Data</a>
 		</div>
 	</div>
 
@@ -342,7 +344,7 @@
 		<div data-role="content">
 			<h2 id="welcome_message"></h2>
 			<p>Enter your PIN to log in to PennCycle.</p>
-			<input type="text" id="pin" placeholder="4 digits">
+			<input type="number" id="pin" placeholder="4 digits">
 			<p id="pin_error"></p>
 			<div id="verify_pin" data-role="button" data-theme="d" type="button">Submit</div>
 			<br>
@@ -367,7 +369,7 @@
 	</div>
 
 	<div data-role="page" id="logout">
-		<div data-role="header" class="logo" data-theme="b">
+		<div data-role="header" data-theme="b">
 			<img src="static/img/logo.png">
 		</div>
 		<div data-role="content">
@@ -385,12 +387,18 @@
 		<div id="home">
 			<h2>Welcome to PennCycle Mobile!</h2>
 			<p class="message">Enter your PennCard to get started.</p>
-			<input type="text" id="penncard" placeholder="8 digits">
+			<input type="number" id="penncard" placeholder="8 digits">
 			<button id="check_for_student">Submit</button>
 		</div>
 		<div id="welcome">
+			<div id="account_info"></div>
 			<div class="ui-grid-b" id="bikes_for_checkout"></div>
 		</div>
 	</div>
+
+	<div data-role="panel" id="account">
+		<div>Account Summary</div>
+		<div>Plans</div>
+		<div>Waiver</div>
 </body>
 </html>
