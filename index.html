@@ -27,7 +27,7 @@
 		.waiver_wrapper {
 			height: 300px;
 			overflow: scroll;
-			padding:10px;
+			padding: 10px;
 			background-color: white;
 		}
 		#map {
@@ -44,16 +44,19 @@
 			height: 100%;
 		}
 		.marker {
-			font-weight: 900;
-			font-size: 16px;
-			line-height: 16px;
+			height: 22px;
+			width: 22px;
 			background-color: white;
 			text-align: center;
-			border-radius: 2px;
+			border-radius: 100%;
+			border: 1px solid black;
 		}
 		.station_marker {
 			padding-left: -10px;
 			background-color: hsl(220, 100%, 90%);
+		}
+		.bike {
+			display: none;
 		}
 	</style>
 	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;sensor=false"></script>
@@ -82,7 +85,7 @@
 				}
 			}, 100 );
 			window.setTimeout(function () {
-				if ( !window.device ) {
+				if (!window.device) {
 					window.clearInterval(timer);
 					alert("Failed to load within 10 seconds. Close and reopen the app.");
 				};
@@ -205,7 +208,13 @@
 			if (!window.localStorage.hasOwnProperty("penncard")) {
 				$("#content").replaceWith($("#home"));
 			} else {
-				$("#content").replaceWith($("#welcome"));
+				$.getJSON(base_url + "mobile/student_data/",
+					{"penncard": window.localStorage.getItem("penncard")},
+					function(data) {
+						display_account(data);
+						window.localStorage.setItem("student_string", JSON.stringify(data));
+					});
+				$("#content").replaceWith($("#welcome_checkout"));
 			}
 			$("#index").trigger("create");
 		}
@@ -238,8 +247,8 @@
 				for (var i = bikes.length - 1; i >= 0; i--) {
 					bike = bikes[i];
 					if (bike.status == "available") {
-						lat = bike.latitude - .0005;
-						lng = bike.longitude - .0002;
+						lat = bike.latitude - .0002;
+						lng = bike.longitude - .0001;
 						station = bike.location;
 						if (station_counts[station]) {
 							lng += .0005 * (station_counts[station] % 5);
@@ -252,9 +261,14 @@
 						var marker = new MarkerWithLabel({
 							position: pos,
 							map: map,
-							icon: "static/img/bike_icon.png",
+							icon: "static/img/blank.png",
 							labelContent: bike.name,
 							labelClass: "marker"
+						});
+						google.maps.event.addListener(marker, "click", function(e) {
+							var el = e.target;
+							var number = el.innerText;
+							$("#bike_" + number).show();
 						});
 					}
 				}
@@ -277,12 +291,17 @@
 						labelContent: station.name,
 						labelClass: "station_marker"
 					});
+					google.maps.event.addListener(marker, "click", function(e) {
+						var station = e.target.innerText;
+						$(".bike").hide();
+						$("." + station).show();
+					});
 				};
 			});
 		}
 		function show_bikes_for_checkout() {
-			var letters = ["a", "b", "c"]
-			var template = '<div id="bike_{{name}}" class="hidden ui-block-{{block}}">'
+			var letters = ["a", "b", "c"];
+			var template = '<div id="bike_{{name}}" class="bike {{location}} ui-block-{{block}}">'
 			+ '<img src="static/img/bikes/{{manufacturer}}.png">'
 			+ '<h3>{{name}} ({{manufacturer}}): At {{location}}</h3>'
 			+ '<button class="checkout" number="{{name}}">Check Out</button>'
@@ -301,6 +320,46 @@
 			}
 			$("#index").trigger("create");
 		}
+		function display_account(data) {
+			if (data.can_ride) {
+				data.eligibility = "able";
+			} else {
+				data.eligible = "unable"
+				data.problem = "You don't currently have any PennCycle plans. "
+				+ "<a href='buy_plan'>Click here</a> to view your options.";
+			}
+			var template = '<h3>Welcome, {{ name}}! You are currently '
+			+ '{{ eligibility }} to ride.</h3>'
+			+ '<p>{{ data.problem }}<p>';
+			var html = Mustache.render(template, data);
+			$("#account_info").html(html);
+			$("#show_bikes").click(function() {
+				$(".bike").show();
+			});
+			$("#hide_bikes").click(function() {
+				$(".bike").hide();
+			});
+		}
+		$(document).on("click", ".checkout", function() {
+			var penncard = window.localStorage.getItem("penncard");
+			var pin = window.localStorage.getItem("pin");
+			var bike = $(this).attr("number");
+			$("#checkout_bike_number").html(bike);
+			$.post(
+				base_url + "mobile/checkout/",
+				{
+					"penncard": penncard,
+					"pin": pin,
+					"bike": bike,
+				}, function(data) {
+					if (data.success) {
+						$("#checkout_pin").html(data.combo);
+						$.mobile.changePage("#checkout_success");
+					} else {
+						$.mobile.changePage("#checkout_failure");
+					}
+				});
+		});
 	</script>
 </head>
 <body>
@@ -390,15 +449,38 @@
 			<input type="number" id="penncard" placeholder="8 digits">
 			<button id="check_for_student">Submit</button>
 		</div>
-		<div id="welcome">
+
+		<div id="welcome_checkout">
 			<div id="account_info"></div>
+			<p>To check out a bike, click on its icon on the map, or select it from the available bikes</p>
+			<a id="show_bikes">Show all bikes</a>
+			| <a id="hide_bikes">Hide bikes</a>
 			<div class="ui-grid-b" id="bikes_for_checkout"></div>
+		</div>
+
+		<div id="welcome_checkin">
+			<div id="account_info"></div>
+			<p>To check in a bike, select the station where you will be checking it in and then click check in.</p>
+			<div id="checked_out_bike"></div>
+			<button id="check_in_bike" class="disabled">Select at station...</button>
 		</div>
 	</div>
 
-	<div data-role="panel" id="account">
-		<div>Account Summary</div>
-		<div>Plans</div>
-		<div>Waiver</div>
+	<div data-role="dialog" id="checkout_success">
+		<div data-role="content">
+			<h2>You have successfully checked out bike <b id="checkout_bike_number"></b>.</h2>
+			<p>The pin is <b id="checkout_pin"></b>.</p>
+			<p>If you do not have a helmet, you may either borrow one for free from Quaker Corner (see the map) or buy your own. <b>Helmets are required for riding PennCycle.</b></p>
+			<a href="#index">OK</a>
+		</div>
+	</div>
+
+	<div data-role="dialog" id="checkout_failure">
+		<div data-role="content">
+			<h2 class="text-error">You were unable to check out bike <span id="checkout_bike_number"></span></h2>
+			<p>This could be because the bike is not currently available, you are ineligible to ride, or your network connection failed.</p>
+			<a href="#index">OK</a>
+		</div>
+	</div>
 </body>
 </html>
